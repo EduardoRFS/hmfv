@@ -1,0 +1,9 @@
+(library
+ (name parsing)
+ (libraries menhirLib compiler-libs.common)
+ (preprocess
+  (pps ppx_deriving.show sedlex.ppx)))
+
+(menhir
+ (modules parser)
+ (flags --explain --external-tokens Token))
