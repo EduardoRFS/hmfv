@@ -162,28 +162,69 @@ let rec typeof env expr =
 let _raw_pp_typ = pp_typ
 
 let pp_typ () =
+  let open Format in
   let next_var = ref 0 in
   let vars = ref [] in
-  let rec pp_typ fmt typ =
-    let open Format in
+  let levels = ref [] in
+  let rec find_vars ~level vars typ =
     let typ = repr typ in
     match typ.desc with
-    | T_var -> (
+    | T_var ->
+        if typ.level == level && not (List.memq typ !vars) then
+          vars := typ :: !vars
+    | T_arrow (p, r) ->
+        find_vars ~level vars p;
+        find_vars ~level vars r
+    | T_link _ -> assert false
+  in
+  let find_vars ~level typ =
+    let vars = ref [] in
+    find_vars ~level vars typ;
+    !vars
+  in
+  let pp_var fmt var =
+    match List.assq_opt var !vars with
+    | Some name -> fprintf fmt "%s" name
+    | None ->
+        let name = Format.sprintf "x%d" !next_var in
+        incr next_var;
+        vars := (var, name) :: !vars;
+        fprintf fmt "%s" name
+  in
+  let has_forall typ =
+    let level = typ.level in
+    if is_generic typ && not (List.memq level !levels) then
+      let vars = find_vars ~level typ in
+      if vars = [] then None else Some vars
+    else None
+  in
+  let rec pp_typ fmt typ =
+    let typ = repr typ in
+    match has_forall typ with
+    | Some vars -> pp_typ_forall vars fmt typ
+    | None -> pp_typ_desc fmt typ
+  and pp_typ_forall vars fmt typ =
+    levels := typ.level :: !levels;
+    fprintf fmt "forall";
+    List.iter (fun var -> fprintf fmt " %a" pp_var var) vars;
+    fprintf fmt ". ";
+    pp_typ_desc fmt typ
+  and pp_typ_desc fmt typ =
+    match typ.desc with
+    | T_var ->
         if not (is_generic typ) then fprintf fmt "_";
-        match List.assq_opt typ !vars with
-        | Some name -> fprintf fmt "%s" name
-        | None ->
-            let name = Format.sprintf "x%d" !next_var in
-            incr next_var;
-            vars := (typ, name) :: !vars;
-            fprintf fmt "%s" name)
+        pp_var fmt typ
     | T_arrow (p, r) ->
         let p = repr p in
-        if p.desc <> T_var then fprintf fmt "(%a) -> %a" pp_typ p pp_typ r
+        if p.desc <> T_var || Option.is_some (has_forall p) then
+          fprintf fmt "(%a) -> %a" pp_typ p pp_typ r
         else fprintf fmt "%a -> %a" pp_typ p pp_typ r
     | T_link _ -> assert false
   in
-  pp_typ
+  fun fmt typ ->
+    let typ = repr typ in
+    levels := typ.level :: !levels;
+    pp_typ_desc fmt typ
 
 let print_typ code =
   reset_level ();
@@ -205,4 +246,5 @@ let () =
 
 let () = print_typ {|let apply f v = f v in apply|}
 let () = print_typ {|let apply f v = f v in apply (lambda x. x)|}
+let () = print_typ {|let sequence _ x = x in sequence|}
 let () = print_typ {|let sequence _ x = x in sequence (lambda x. x)|}
