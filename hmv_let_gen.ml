@@ -186,3 +186,4 @@ let () =
 
 let () = print_typ {|let apply f v = f v in apply|}
 let () = print_typ {|let apply f v = f v in apply (lambda x. x)|}
+let () = print_typ {|let sequence _ x = x in sequence (lambda x. x)|}

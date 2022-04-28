@@ -44,9 +44,11 @@ let level_weight level = !level
 type typ = { mutable desc : desc; mutable level : level }
 and desc = T_arrow of typ * typ | T_var | T_link of typ [@@deriving show]
 
-let new_typ desc = { desc; level = current_level () }
-let new_arrow p r = new_typ (T_arrow (p, r))
-let new_var () = new_typ T_var
+let make_typ desc level = { desc; level }
+let make_arrow p r level = make_typ (T_arrow (p, r)) level
+let make_var level = make_typ T_var level
+let new_arrow p r = make_arrow p r (current_level ())
+let new_var () = make_var (current_level ())
 
 let rec repr typ =
   (* TODO: path compression *)
@@ -54,27 +56,36 @@ let rec repr typ =
 
 let is_generic typ = level_weight typ.level = generic_level_weight
 
-(* instantiation copies and weaken generic types *)
+(* instantiation copies and weaken top level forall type *)
 let instance typ =
+  let typ = repr typ in
   let subst = ref [] in
-
+  let levels = ref [ (typ.level, current_level ()) ] in
   let rec instance typ =
     let typ = repr typ in
-    if is_generic typ then instance_uniq typ else typ
-  and instance_uniq typ =
+    if is_generic typ then instance_uniq_typ typ else typ
+  and instance_uniq_typ typ =
     match List.assq_opt typ !subst with
     | Some typ' -> typ'
     | None ->
-        let typ' = instance_desc typ in
+        let typ' = instance_uniq_level typ in
         subst := (typ, typ') :: !subst;
         typ'
-  and instance_desc typ =
+  and instance_uniq_level typ =
+    let level = typ.level in
+    match List.assq_opt level !levels with
+    | Some level' -> instance_desc level' typ
+    | None ->
+        let level' = ref generic_level_weight in
+        levels := (level, level') :: !levels;
+        instance_desc level' typ
+  and instance_desc level typ =
     match typ.desc with
-    | T_var -> new_var ()
+    | T_var -> make_var level
     | T_arrow (p, r) ->
         let p = instance p in
         let r = instance r in
-        new_arrow p r
+        make_arrow p r level
     | T_link _ -> assert false
   in
 
@@ -116,6 +127,17 @@ and unify_var ~var typ =
   occurs ~var typ;
   var.desc <- T_link typ
 
+let funmatch typ =
+  let typ = repr typ in
+  match typ.desc with
+  | T_var ->
+      let ty_par = new_var () in
+      let ty_res = new_var () in
+      unify typ (new_arrow ty_par ty_res);
+      (ty_par, ty_res)
+  | T_arrow (ty_par, ty_res) -> (ty_par, ty_res)
+  | T_link _ -> assert false
+
 let rec typeof env expr =
   match expr with
   | Pexp_var x -> List.assoc x env
@@ -129,9 +151,9 @@ let rec typeof env expr =
       ty
   | Pexp_apply (e1, e2) ->
       let ty_fun = instance (typeof env e1) in
+      let ty_par, ty_res = funmatch ty_fun in
       let ty_arg = instance (typeof env e2) in
-      let ty_res = new_var () in
-      unify ty_fun (new_arrow ty_arg ty_res);
+      unify ty_par ty_arg;
       ty_res
   | Pexp_let (x, e1, e2) ->
       let ty_e1 = typeof env e1 in
@@ -184,3 +206,4 @@ let () =
 
 let () = print_typ {|let apply f v = f v in apply|}
 let () = print_typ {|let apply f v = f v in apply (lambda x. x)|}
+let () = print_typ {|let sequence _ x = x in sequence (lambda x. x)|}
