@@ -144,7 +144,6 @@ let rec typeof env expr =
   | Pexp_lambda (x, None, e) ->
       enter_level ();
       let ty_x = new_var () in
-      (* creates multiple foralls but instance remove all of them *)
       let ty_e = typeof ((x, ty_x) :: env) e in
       let ty = new_arrow ty_x ty_e in
       leave_level ();
