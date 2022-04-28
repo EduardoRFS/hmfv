@@ -6,7 +6,7 @@ open Parsing
    With one main difference, the level is indicated by a reference
    allowing O(1) generalization.
 
-   It generalizes on let and implements basic value restriction *)
+   It generalizes on lambda and implements basic value restriction *)
 
 (* level is represented by a reference to a weight
    the weight indicate the direction to go when unifying *)
@@ -32,10 +32,10 @@ let enter_level () =
   let level_weight = current_level_weight () + 1 in
   Stack.push (ref level_weight) current_level
 
-let leave_level ~should_generalize =
+let leave_level () =
   let current_level = Stack.pop current_level in
   (* auto generalize when leaving *)
-  if should_generalize then generalize current_level
+  generalize current_level
 
 let current_level () = Stack.top current_level
 let level_weight level = !level
@@ -118,25 +118,23 @@ and unify_var ~var typ =
 
 let rec typeof env expr =
   match expr with
-  | Pexp_var x -> instance (List.assoc x env)
+  | Pexp_var x -> List.assoc x env
   | Pexp_lambda (x, None, e) ->
+      enter_level ();
       let ty_x = new_var () in
+      (* creates multiple foralls but instance remove all of them *)
       let ty_e = typeof ((x, ty_x) :: env) e in
-      new_arrow ty_x ty_e
+      let ty = new_arrow ty_x ty_e in
+      leave_level ();
+      ty
   | Pexp_apply (e1, e2) ->
-      let ty_fun = typeof env e1 in
-      let ty_arg = typeof env e2 in
+      let ty_fun = instance (typeof env e1) in
+      let ty_arg = instance (typeof env e2) in
       let ty_res = new_var () in
       unify ty_fun (new_arrow ty_arg ty_res);
       ty_res
   | Pexp_let (x, e1, e2) ->
-      enter_level ();
       let ty_e1 = typeof env e1 in
-      (* value restriction *)
-      let should_generalize =
-        match e1 with Pexp_var _ | Pexp_lambda _ -> true | _ -> false
-      in
-      leave_level ~should_generalize;
       typeof ((x, ty_e1) :: env) e2
   | Pexp_lambda (_, Some _typ, _) -> failwith "unsupported"
 
