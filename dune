@@ -1,0 +1,10 @@
+(executable
+ (name hmv_let_gen)
+ (modules Hmv_let_gen)
+ (libraries parsing))
+
+(rule
+ (alias runtest)
+ (deps ./hmv_let_gen.exe)
+ (action
+  (run ./hmv_let_gen.exe)))
