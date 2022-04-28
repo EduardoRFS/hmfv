@@ -172,7 +172,7 @@ let print_typ code =
   let ty = typeof [] expr in
   Format.printf "%a\n%!" (pp_typ ()) ty
 
-let () = Format.printf "hmv_let_gen\n%!"
+let () = Format.printf "hmv_lam_gen\n%!"
 let () = print_typ {|lambda x. x|}
 let () = print_typ {|let id x = x in id|}
 let () = print_typ {|let id x = x in let id_id = id id in id_id|}

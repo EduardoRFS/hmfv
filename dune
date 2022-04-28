@@ -3,8 +3,19 @@
  (modules Hmv_let_gen)
  (libraries parsing))
 
+(executable
+ (name hmv_lam_gen)
+ (modules Hmv_lam_gen)
+ (libraries parsing))
+
 (rule
  (alias runtest)
  (deps ./hmv_let_gen.exe)
  (action
   (run ./hmv_let_gen.exe)))
+
+(rule
+ (alias runtest)
+ (deps ./hmv_lam_gen.exe)
+ (action
+  (run ./hmv_lam_gen.exe)))
