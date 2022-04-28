@@ -248,3 +248,11 @@ let () = print_typ {|let apply f v = f v in apply|}
 let () = print_typ {|let apply f v = f v in apply (lambda x. x)|}
 let () = print_typ {|let sequence _ x = x in sequence|}
 let () = print_typ {|let sequence _ x = x in sequence (lambda x. x)|}
+
+(* only works due to more powerful value restriction *)
+let () =
+  print_typ
+    {|let sequence _ x = x in
+      let id x = x in
+      let id = sequence id in
+      id id|}
